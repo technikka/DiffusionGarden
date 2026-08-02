@@ -8,8 +8,8 @@
 constexpr int window_width = 600;
 constexpr int window_height = 600;
 
-constexpr int rows = 200;
-constexpr int columns = 200;
+constexpr int rows = 300;
+constexpr int columns = 300;
 
 struct Cell {
     double a = 1.0;
@@ -51,39 +51,34 @@ void ForEachCell(Callable callable) {
     }
 }
 
-std::vector<const Cell*> GetNeighbors(const std::vector<Cell>& current_grid,
-                                      int index) {
-    const int row = index / columns;
-    const int column = index % columns;
-    std::vector<const Cell*> neighbors;
-
-    if (row != 0) {
-        neighbors.push_back(&current_grid[index - columns]);
-    }
-    if (column != columns - 1) {
-        neighbors.push_back(&current_grid[index + 1]);
-    }
-    if (row != rows - 1) {
-        neighbors.push_back(&current_grid[index + columns]);
-    }
-    if (column != 0) {
-        neighbors.push_back(&current_grid[index - 1]);
-    }
-    return neighbors;
-}
-
 // Calculates the concentration difference with neighboring cells.
 // Positive: neighbors have more. Negative: current cell has more.
-double CalculateLaplacian(const std::vector<Cell>& current_grid, int index,
-                          double Cell::* value) {
+double CalculateLaplacian(const std::vector<Cell>& current_grid, int row,
+                          int column, int index, double Cell::* value) {
     const Cell& current_cell = current_grid[index];
-    std::vector<const Cell*> neighbors = GetNeighbors(current_grid, index);
+
     double sum_neighbors = 0.0;
-    for (auto* neighbor : neighbors) {
-        sum_neighbors += neighbor->*value;
+    int neighbor_count = 0;
+
+    if (row != 0) {
+        sum_neighbors += current_grid[index - columns].*value;
+        ++neighbor_count;
     }
+    if (column != columns - 1) {
+        sum_neighbors += current_grid[index + 1].*value;
+        ++neighbor_count;
+    }
+    if (row != rows - 1) {
+        sum_neighbors += current_grid[index + columns].*value;
+        ++neighbor_count;
+    }
+    if (column != 0) {
+        sum_neighbors += current_grid[index - 1].*value;
+        ++neighbor_count;
+    }
+
     return sum_neighbors -
-           static_cast<double>(neighbors.size()) * (current_cell.*value);
+           static_cast<double>(neighbor_count) * (current_cell.*value);
 }
 
 void UpdateCells(std::vector<Cell>& current_grid,
@@ -94,9 +89,9 @@ void UpdateCells(std::vector<Cell>& current_grid,
         Cell& next_cell = next_grid[index];
 
         const double laplacian_a =
-            CalculateLaplacian(current_grid, index, &Cell::a);
+            CalculateLaplacian(current_grid, row, column, index, &Cell::a);
         const double laplacian_b =
-            CalculateLaplacian(current_grid, index, &Cell::b);
+            CalculateLaplacian(current_grid, row, column, index, &Cell::b);
 
         const double reaction =
             current_cell.a * current_cell.b * current_cell.b;
@@ -114,8 +109,8 @@ int main() {
     std::vector<Cell> current_grid(rows * columns);
     std::vector<Cell> next_grid(rows * columns);
 
-    bool viewing_b = true;
     bool reset_this_frame = true;
+    bool paused = false;
 
     sf::RenderWindow window(sf::VideoMode({window_width, window_height}),
                             "Diffusion Garden");
@@ -144,17 +139,14 @@ int main() {
                     ResetSimulation(current_grid, next_grid);
                     reset_this_frame = true;
                 } else if (key_pressed->scancode ==
-                           sf::Keyboard::Scancode::Num1) {
-                    viewing_b = true;
-                } else if (key_pressed->scancode ==
-                           sf::Keyboard::Scancode::Num2) {
-                    viewing_b = false;
+                           sf::Keyboard::Scancode::Space) {
+                    paused = !paused;
                 }
             }
         }
-        if (!reset_this_frame) {
+        if (!paused && !reset_this_frame) {
             constexpr int updates_per_frame =
-                100;  // approx 300 timesteps per second
+                10;  // Up to 300 timesteps per second at 30 FPS.
 
             for (int i = 0; i < updates_per_frame; ++i) {
                 UpdateCells(current_grid, next_grid);
@@ -169,27 +161,18 @@ int main() {
             const Cell& current_cell = current_grid[index];
             const int pixel_offset = index * 4;
 
-            if (!viewing_b) {
-                const double concentration =
-                    std::clamp(current_cell.a, 0.0, 1.0);
-                const std::uint8_t intensity =
-                    static_cast<std::uint8_t>(concentration * 255.0);
-                // white to blue
-                pixels[pixel_offset] = 255 - intensity;      // Red
-                pixels[pixel_offset + 1] = 255 - intensity;  // Green
-                pixels[pixel_offset + 2] = 255;              // Blue
-                pixels[pixel_offset + 3] = 255;              // Alpha
-            } else {
-                const double concentration =
-                    std::clamp(current_cell.b, 0.0, 1.0);
-                const std::uint8_t color_intensity =
-                    static_cast<std::uint8_t>(concentration * 255.0);
-                // white to green
-                pixels[pixel_offset] = 255 - color_intensity;
-                pixels[pixel_offset + 1] = 255;
-                pixels[pixel_offset + 2] = 255 - color_intensity;
-                pixels[pixel_offset + 3] = 255;
-            }
+            const double concentration = std::clamp(current_cell.b, 0.0, 1.0);
+            const std::uint8_t intensity =
+                static_cast<std::uint8_t>(concentration * 255.0);
+
+            constexpr std::uint8_t red = 66;
+            constexpr std::uint8_t green = 110;
+            constexpr std::uint8_t blue = 52;
+
+            pixels[pixel_offset] = 255 - ((255 - red) * intensity) / 255;
+            pixels[pixel_offset + 1] = 255 - ((255 - green) * intensity) / 255;
+            pixels[pixel_offset + 2] = 255 - ((255 - blue) * intensity) / 255;
+            pixels[pixel_offset + 3] = 255;
         });
         texture.update(pixels.data());
         window.draw(sprite);
