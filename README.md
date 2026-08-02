@@ -4,21 +4,24 @@ Diffusion Garden is a modern C++ implementation of the Gray–Scott reaction-dif
 
 The project explores how simple local chemical interactions can produce complex emergent patterns.
 
-## Current Status
+## Current Features
 
-Initial project setup is complete.
-
-- CMake build configuration
-- SFML 3.1 integration
-- Basic graphical window and rendering loop
+- Gray–Scott reaction-diffusion simulation
+- Real-time visualization with SFML
+- Texture-based renderer for efficient drawing
+- Adjustable model parameters (diffusion, feed, and kill rates)
+- Reset simulation
+- Pause simulation
+- Collection of saved parameter presets
     
 
 ## Goals
 
-- Implement the Gray–Scott reaction-diffusion model 
-- Visualize chemical concentrations in real time
-- Explore how parameter changes affect the patterns produced by the simulation.
-    
+- Explore emergent behavior through reaction-diffusion
+- Discover how parameter changes influence pattern formation
+- Catalog interesting reaction-diffusion patterns
+- Build a foundation for future artificial life and ecosystem simulations
+
 
 ## Technologies
 
