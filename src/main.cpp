@@ -8,8 +8,8 @@
 constexpr int window_width = 600;
 constexpr int window_height = 600;
 
-constexpr int rows = 40;
-constexpr int columns = 40;
+constexpr int rows = 200;
+constexpr int columns = 200;
 
 constexpr float cell_width = static_cast<float>(window_width) / columns;
 constexpr float cell_height = static_cast<float>(window_height) / rows;
@@ -21,18 +21,28 @@ struct Cell {
 
 constexpr double diffusion_a = 0.2;
 constexpr double diffusion_b = 0.1;
+constexpr double feed_rate = 0.055;
+constexpr double kill_rate = 0.062;
 
 const int center_row = rows / 2;
 const int center_column = columns / 2;
 const int center_index = center_row * columns + center_column;
 
+// Defines seeded chemical values.
 void ResetSimulation(std::vector<Cell>& current_grid,
                      std::vector<Cell>& next_grid) {
     current_grid.assign(rows * columns, Cell{});
     next_grid.assign(rows * columns, Cell{});
 
-    current_grid[center_index].b = 1.0;
-    current_grid[center_index].a = 0.0;
+    for (int row = center_row - 3; row <= center_row + 3; ++row) {
+        for (int column = center_column - 3; column <= center_column + 3;
+             ++column) {
+            const int index = row * columns + column;
+
+            current_grid[index].a = 0.0;
+            current_grid[index].b = 1.0;
+        }
+    }
 }
 
 template <typename Callable>
@@ -91,8 +101,13 @@ void UpdateCells(std::vector<Cell>& current_grid,
         const double laplacian_b =
             CalculateLaplacian(current_grid, index, &Cell::b);
 
-        next_cell.a = current_cell.a + diffusion_a * laplacian_a;
-        next_cell.b = current_cell.b + diffusion_b * laplacian_b;
+        const double reaction =
+            current_cell.a * current_cell.b * current_cell.b;
+
+        next_cell.a = current_cell.a + diffusion_a * laplacian_a - reaction +
+                      feed_rate * (1.0 - current_cell.a);
+        next_cell.b = current_cell.b + diffusion_b * laplacian_b + reaction -
+                      (kill_rate + feed_rate) * current_cell.b;
     });
 
     std::swap(current_grid, next_grid);
@@ -108,7 +123,7 @@ int main() {
     sf::RenderWindow window(sf::VideoMode({window_width, window_height}),
                             "Diffusion Garden");
 
-    window.setFramerateLimit(1);
+    window.setFramerateLimit(30);
 
     sf::RectangleShape cell({cell_width, cell_height});
 
@@ -133,7 +148,12 @@ int main() {
             }
         }
         if (!reset_this_frame) {
-            UpdateCells(current_grid, next_grid);
+            constexpr int updates_per_frame =
+                10;  // approx 300 timesteps per second
+
+            for (int i = 0; i < updates_per_frame; ++i) {
+                UpdateCells(current_grid, next_grid);
+            }
         }
         reset_this_frame = false;
 
