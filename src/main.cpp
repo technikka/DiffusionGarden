@@ -1,6 +1,4 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/System/Vector2.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <optional>
@@ -21,21 +19,82 @@ struct Cell {
     double b = 0.0;
 };
 
-void UpdateCells(std::vector<Cell>& current_grid,
-                 std::vector<Cell>& next_grid) {
-    double concentration = 0.0;
+constexpr double diffusion_a = 0.2;
+constexpr double diffusion_b = 0.1;
+
+const int center_row = rows / 2;
+const int center_column = columns / 2;
+const int center_index = center_row * columns + center_column;
+
+void ResetSimulation(std::vector<Cell>& current_grid,
+                     std::vector<Cell>& next_grid) {
+    current_grid.assign(rows * columns, Cell{});
+    next_grid.assign(rows * columns, Cell{});
+
+    current_grid[center_index].b = 1.0;
+    current_grid[center_index].a = 0.0;
+}
+
+template <typename Callable>
+void ForEachCell(Callable callable) {
     for (int row = 0; row < rows; ++row) {
         for (int column = 0; column < columns; ++column) {
-            const int index = row * columns + column;
-            const Cell& current_cell = current_grid[index];
-            Cell& next_cell = next_grid[index];
-
-            next_cell.b = concentration;
-            if (row == column && row % 3 == 0) {
-                concentration += 0.05;
-            }
+            callable(row, column);
         }
     }
+}
+
+std::vector<const Cell*> GetNeighbors(const std::vector<Cell>& current_grid,
+                                      int index) {
+    const int row = index / columns;
+    const int column = index % columns;
+    std::vector<const Cell*> neighbors;
+
+    if (row != 0) {
+        neighbors.push_back(&current_grid[index - columns]);
+    }
+    if (column != columns - 1) {
+        neighbors.push_back(&current_grid[index + 1]);
+    }
+    if (row != rows - 1) {
+        neighbors.push_back(&current_grid[index + columns]);
+    }
+    if (column != 0) {
+        neighbors.push_back(&current_grid[index - 1]);
+    }
+    return neighbors;
+}
+
+// Calculates the concentration difference with neighboring cells.
+// Positive: neighbors have more. Negative: current cell has more.
+double CalculateLaplacian(const std::vector<Cell>& current_grid, int index,
+                          double Cell::* value) {
+    const Cell& current_cell = current_grid[index];
+    std::vector<const Cell*> neighbors = GetNeighbors(current_grid, index);
+    double sum_neighbors = 0.0;
+    for (auto* neighbor : neighbors) {
+        sum_neighbors += neighbor->*value;
+    }
+    return sum_neighbors -
+           static_cast<double>(neighbors.size()) * (current_cell.*value);
+}
+
+void UpdateCells(std::vector<Cell>& current_grid,
+                 std::vector<Cell>& next_grid) {
+    ForEachCell([&](int row, int column) {
+        const int index = row * columns + column;
+        const Cell& current_cell = current_grid[index];
+        Cell& next_cell = next_grid[index];
+
+        const double laplacian_a =
+            CalculateLaplacian(current_grid, index, &Cell::a);
+        const double laplacian_b =
+            CalculateLaplacian(current_grid, index, &Cell::b);
+
+        next_cell.a = current_cell.a + diffusion_a * laplacian_a;
+        next_cell.b = current_cell.b + diffusion_b * laplacian_b;
+    });
+
     std::swap(current_grid, next_grid);
 }
 
@@ -43,49 +102,69 @@ int main() {
     std::vector<Cell> current_grid(rows * columns);
     std::vector<Cell> next_grid(rows * columns);
 
+    bool viewing_b = true;
+    bool reset_this_frame = true;
+
     sf::RenderWindow window(sf::VideoMode({window_width, window_height}),
                             "Diffusion Garden");
 
+    window.setFramerateLimit(1);
+
     sf::RectangleShape cell({cell_width, cell_height});
 
-    // Initialization
-    for (int row = 0; row < rows; ++row) {
-        for (int column = 0; column < columns; ++column) {
-        }
-    }
+    ResetSimulation(current_grid, next_grid);  // Seed
 
-    // Rendering
     while (window.isOpen()) {
         while (const std::optional event = window.pollEvent()) {
-            if (event->is<sf::Event::Closed>()) window.close();
-        }
-
-        UpdateCells(current_grid, next_grid);
-        window.clear();
-
-        for (int row = 0; row < rows; ++row) {
-            for (int column = 0; column < columns; ++column) {
-                const int index = row * columns + column;
-                Cell& current_cell = current_grid[index];
-
-                sf::Vector2f position = {column * cell_width,
-                                         row * cell_height};
-
-                cell.setPosition(position);
-
-                const double concentration =
-                    std::clamp(current_cell.b, 0.0, 1.0);
-
-                const std::uint8_t intensity =
-                    static_cast<std::uint8_t>(concentration * 255.0);
-
-                cell.setFillColor(
-                    sf::Color(255 - intensity, 255, 255 - intensity));
-
-                window.draw(cell);
+            if (event->is<sf::Event::Closed>()) {
+                window.close();
+            } else if (const auto* key_pressed =
+                           event->getIf<sf::Event::KeyPressed>()) {
+                if (key_pressed->scancode == sf::Keyboard::Scancode::R) {
+                    ResetSimulation(current_grid, next_grid);
+                    reset_this_frame = true;
+                } else if (key_pressed->scancode ==
+                           sf::Keyboard::Scancode::Num1) {
+                    viewing_b = true;
+                } else if (key_pressed->scancode ==
+                           sf::Keyboard::Scancode::Num2) {
+                    viewing_b = false;
+                }
             }
         }
+        if (!reset_this_frame) {
+            UpdateCells(current_grid, next_grid);
+        }
+        reset_this_frame = false;
 
+        window.clear();
+
+        ForEachCell([&](int row, int column) {
+            const int index = row * columns + column;
+            const Cell& current_cell = current_grid[index];
+
+            sf::Vector2f position = {column * cell_width, row * cell_height};
+            cell.setPosition(position);
+
+            if (!viewing_b) {
+                const double concentration =
+                    std::clamp(current_cell.a, 0.0, 1.0);
+                const std::uint8_t intensity =
+                    static_cast<std::uint8_t>(concentration * 255.0);
+                // blue
+                cell.setFillColor(
+                    sf::Color(255 - intensity, 255 - intensity, 255));
+            } else {
+                const double concentration =
+                    std::clamp(current_cell.b, 0.0, 1.0);
+                const std::uint8_t color_intensity =
+                    static_cast<std::uint8_t>(concentration * 255.0);
+                // green
+                cell.setFillColor(sf::Color(255 - color_intensity, 255,
+                                            255 - color_intensity));
+            }
+            window.draw(cell);
+        });
         window.display();
     }
 }
