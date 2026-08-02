@@ -11,9 +11,6 @@ constexpr int window_height = 600;
 constexpr int rows = 200;
 constexpr int columns = 200;
 
-constexpr float cell_width = static_cast<float>(window_width) / columns;
-constexpr float cell_height = static_cast<float>(window_height) / rows;
-
 struct Cell {
     double a = 1.0;
     double b = 0.0;
@@ -123,9 +120,17 @@ int main() {
     sf::RenderWindow window(sf::VideoMode({window_width, window_height}),
                             "Diffusion Garden");
 
-    window.setFramerateLimit(30);
+    std::vector<std::uint8_t> pixels(rows * columns * 4);  // 4 values: RGBA
 
-    sf::RectangleShape cell({cell_width, cell_height});
+    sf::Texture texture(sf::Vector2u{static_cast<unsigned int>(columns),
+                                     static_cast<unsigned int>(rows)});
+    texture.setSmooth(false);
+
+    sf::Sprite sprite(texture);
+    sprite.setScale({static_cast<float>(window_width) / columns,
+                     static_cast<float>(window_height) / rows});
+
+    window.setFramerateLimit(30);
 
     ResetSimulation(current_grid, next_grid);  // Seed
 
@@ -149,7 +154,7 @@ int main() {
         }
         if (!reset_this_frame) {
             constexpr int updates_per_frame =
-                10;  // approx 300 timesteps per second
+                100;  // approx 300 timesteps per second
 
             for (int i = 0; i < updates_per_frame; ++i) {
                 UpdateCells(current_grid, next_grid);
@@ -162,29 +167,32 @@ int main() {
         ForEachCell([&](int row, int column) {
             const int index = row * columns + column;
             const Cell& current_cell = current_grid[index];
-
-            sf::Vector2f position = {column * cell_width, row * cell_height};
-            cell.setPosition(position);
+            const int pixel_offset = index * 4;
 
             if (!viewing_b) {
                 const double concentration =
                     std::clamp(current_cell.a, 0.0, 1.0);
                 const std::uint8_t intensity =
                     static_cast<std::uint8_t>(concentration * 255.0);
-                // blue
-                cell.setFillColor(
-                    sf::Color(255 - intensity, 255 - intensity, 255));
+                // white to blue
+                pixels[pixel_offset] = 255 - intensity;      // Red
+                pixels[pixel_offset + 1] = 255 - intensity;  // Green
+                pixels[pixel_offset + 2] = 255;              // Blue
+                pixels[pixel_offset + 3] = 255;              // Alpha
             } else {
                 const double concentration =
                     std::clamp(current_cell.b, 0.0, 1.0);
                 const std::uint8_t color_intensity =
                     static_cast<std::uint8_t>(concentration * 255.0);
-                // green
-                cell.setFillColor(sf::Color(255 - color_intensity, 255,
-                                            255 - color_intensity));
+                // white to green
+                pixels[pixel_offset] = 255 - color_intensity;
+                pixels[pixel_offset + 1] = 255;
+                pixels[pixel_offset + 2] = 255 - color_intensity;
+                pixels[pixel_offset + 3] = 255;
             }
-            window.draw(cell);
         });
+        texture.update(pixels.data());
+        window.draw(sprite);
         window.display();
     }
 }
