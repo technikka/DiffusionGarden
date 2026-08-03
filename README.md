@@ -41,3 +41,10 @@ Run the executable:
 
 ```bash
 ./build/bin/diffusion-garden
+```
+
+## Controls
+
+- `R` — Reset the simulation
+- `Space` — Pause or resume the simulation
+

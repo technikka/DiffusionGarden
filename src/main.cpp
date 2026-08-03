@@ -5,11 +5,23 @@
 #include <utility>
 #include <vector>
 
-constexpr int window_width = 600;
-constexpr int window_height = 600;
+// * Small, fast-growing space
+// constexpr int window_width = 600;
+// constexpr int window_height = 600;
+// constexpr int rows = 300;
+// constexpr int columns = 300;
 
-constexpr int rows = 300;
-constexpr int columns = 300;
+// * Medium, slow-growing space
+constexpr int window_width = 800;
+constexpr int window_height = 800;
+constexpr int rows = 600;
+constexpr int columns = 600;
+
+// * Large, very-slow-growing space
+// constexpr int window_width = 800;
+// constexpr int window_height = 800;
+// constexpr int rows = 1201;
+// constexpr int columns = 1201;
 
 struct Cell {
     double a = 1.0;
@@ -18,8 +30,11 @@ struct Cell {
 
 constexpr double diffusion_a = 0.2;
 constexpr double diffusion_b = 0.1;
-constexpr double feed_rate = 0.055;
-constexpr double kill_rate = 0.062;
+constexpr double feed_rate = 0.05;
+constexpr double kill_rate = 0.06;
+
+constexpr double seed_a = 0.0;
+constexpr double seed_b = 1.0;
 
 const int center_row = rows / 2;
 const int center_column = columns / 2;
@@ -31,15 +46,39 @@ void ResetSimulation(std::vector<Cell>& current_grid,
     current_grid.assign(rows * columns, Cell{});
     next_grid.assign(rows * columns, Cell{});
 
+    // * One central seed
     for (int row = center_row - 3; row <= center_row + 3; ++row) {
         for (int column = center_column - 3; column <= center_column + 3;
              ++column) {
             const int index = row * columns + column;
-
-            current_grid[index].a = 0.0;
-            current_grid[index].b = 1.0;
+            current_grid[index].a = seed_a;
+            current_grid[index].b = seed_b;
         }
     }
+
+    // * Four central seeds
+    // constexpr int seed_radius = 3;
+    // const int offset = 50;
+
+    // const std::pair<int, int> seed_centers[] = {
+    //     {center_row - offset, center_column - offset},
+    //     {center_row - offset, center_column + offset},
+    //     {center_row + offset, center_column - offset},
+    //     {center_row + offset, center_column + offset},
+    // };
+
+    // for (const auto& [seed_row, seed_column] : seed_centers) {
+    //     for (int row = seed_row - seed_radius; row <= seed_row + seed_radius;
+    //          ++row) {
+    //         for (int column = seed_column - seed_radius;
+    //              column <= seed_column + seed_radius; ++column) {
+    //             const int index = row * columns + column;
+
+    //             current_grid[index].a = 0.0;
+    //             current_grid[index].b = 1.0;
+    //         }
+    //     }
+    // }
 }
 
 template <typename Callable>
