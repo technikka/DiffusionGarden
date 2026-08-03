@@ -13,6 +13,12 @@ The project explores how simple local chemical interactions can produce complex 
 - Reset simulation
 - Pause simulation
 - Collection of saved parameter presets
+
+## Experiments
+
+Interested in the patterns discovered so far?
+
+See the [Experiment Log](experiment-log.md) for screenshots, parameter sets, observations, and notes from exploring the Gray–Scott model.
     
 
 ## Goals
